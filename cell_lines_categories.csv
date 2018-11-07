@@ -1,0 +1,41 @@
+TMT_label,Sample,Receptor_Status,Molecular_subtype,Batch,TP53,color_map
+Batch_1_126_sn_sum,BT20,TNBC,Basal A,Batch_1,Mutant,#ca7832
+Batch_1_127n_sn_sum,HCC1806,TNBC,Basal A,Batch_1,Mutant,#ca7832
+Batch_1_127c_sn_sum,HS578T,TNBC,Basal B,Batch_1,Mutant,#ca7832
+Batch_1_128n_sn_sum,MCF10A,NM,"Non malignant, Basal",Batch_1,WT,#c85f61
+Batch_1_128c_sn_sum,MCF7,HR+,Luminal,Batch_1,WT,#7da245
+Batch_1_129n_sn_sum,MDAMB231,TNBC,Basal B,Batch_1,Mutant,#ca7832
+Batch_1_129c_sn_sum,PDX1258,TNBC,unconfirmed,Batch_1,WT,#ca7832
+Batch_1_130n_sn_sum,PDX1328,TNBC,unconfirmed,Batch_1,WT,#ca7832
+Batch_1_130c_sn_sum,SKBR3,HER2amp,Luminal,Batch_1,WT,#4dab9b
+Batch_1_131_sn_sum,BRIDGE1,Nan,Nan,Batch_1,,
+Batch_2_126_sn_sum,MDAMB134,HR+,Luminal,Batch_2,WT,#7da245
+Batch_2_127n_sn_sum,MDAMB157,TNBC,Basal B,Batch_2,Mutant,#ca7832
+Batch_2_127c_sn_sum,MDAMB361,HER2amp,Luminal,Batch_2,WT,#4dab9b
+Batch_2_128n_sn_sum,MDAMB436,TNBC,Basal B,Batch_2,Mutant,#ca7832
+Batch_2_128c_sn_sum,MDAMB453,TNBC,Luminal,Batch_2,WT,#ca7832
+Batch_2_129n_sn_sum,MDAMB468,TNBC,Basal A,Batch_2,Mutant,#ca7832
+Batch_2_129c_sn_sum,CAL51,TNBC,Basal B,Batch_2,WT,#ca7832
+Batch_2_130n_sn_sum,CAL851,TNBC,Basal,Batch_2,WT,#ca7832
+Batch_2_130c_sn_sum,CAL120,TNBC,Luminal,Batch_2,Mutant,#ca7832
+Batch_2_131_sn_sum,BRIDGE2,Nan,Nan,Batch_2,,
+Batch_3_126_sn_sum,BT549,TNBC,Basal B,Batch_3,Mutant,#ca7832
+Batch_3_127n_sn_sum,HCC38,TNBC,Basal B,Batch_3,Mutant,#ca7832
+Batch_3_127c_sn_sum,HCC70,TNBC,Basal A,Batch_3,Mutant,#ca7832
+Batch_3_128n_sn_sum,HCC1395,TNBC,Basal B,Batch_3,WT,#ca7832
+Batch_3_128c_sn_sum,HCC1419,HER2amp,Luminal,Batch_3,Mutant,#4dab9b
+Batch_3_129n_sn_sum,HCC1500,HR+,Luminal,Batch_3,WT,#7da245
+Batch_3_129c_sn_sum,HCC1937,TNBC,Basal A,Batch_3,WT,#ca7832
+Batch_3_130n_sn_sum,HCC1954,HER2amp,Basal A,Batch_3,Mutant,#4dab9b
+Batch_3_130c_sn_sum,PDXHCI002,TNBC,unconfirmed,Batch_3,WT,#ca7832
+Batch_3_131_sn_sum,BRIDGE3,Nan,Nan,Batch_3,,
+Batch_4_126_sn_sum,CAMA1,HR+,Luminal,Batch_4,Mutant,#7da245
+Batch_4_127n_sn_sum,HCC1143,TNBC,Basal A,Batch_4,Mutant,#ca7832
+Batch_4_127c_sn_sum,HCC1428,HR+,Luminal,Batch_4,WT,#7da245
+Batch_4_128n_sn_sum,HME1,NM,"Non malignant, Basal",Batch_4,WT,#c85f61
+Batch_4_128c_sn_sum,MCF10AREP2,NM,"Non malignant, Basal",Batch_4,WT,#c85f61
+Batch_4_129n_sn_sum,SUM1315,TNBC,Basal B,Batch_4,WT,#ca7832
+Batch_4_129c_sn_sum,SUM149,TNBC,Basal B,Batch_4,WT,#ca7832
+Batch_4_130n_sn_sum,SUM159,TNBC,Basal B,Batch_4,Mutant,#ca7832
+Batch_4_130c_sn_sum,T47D,HR+,Luminal,Batch_4,Mutant,#7da245
+Batch_4_131_sn_sum,BRIDGE4,Nan,Nan,Batch_4,,
