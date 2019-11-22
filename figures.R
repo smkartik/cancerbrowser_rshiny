@@ -13,6 +13,8 @@ add.alpha <- function(col, alpha=1){
           rgb(x[1], x[2], x[3], alpha=alpha))  
 }
 
+# mRNA dendrogram
+# ----------------------------------------------------------------------------------
 gene_types <- synGet('syn9846154')
 dfg <- read.table(gene_types$path,stringsAsFactors = TRUE, 
                   sep=',', header=TRUE)
@@ -25,38 +27,92 @@ df <- dfr[rownames(dfr) %in% coding_genes, ]
 dft <- transpose(df)
 rownames(dft) <- colnames(df)
 colnames(dft) <- rownames(df)
-dd <- dist(dft, method = "euclidean")
-hc <- hclust(dd, method = "ward.D2")
-hcd <- as.dendrogram(hc)
-par(cex=0.9) # Set dendrogram label size
-plot(hcd, main='RNASeq')
 
-cell_line_order <- rownames(dft)[hc$order]
+cell_line_order <- rownames(dft)#[hc$order]
 # Get cell line categories
-dc <- read_csv('cell_lines_categories.cgp1sv')
+dc <- as.data.frame(read_csv('cell_lines_categories.csv'))
 dc2 <- dc[dc$Sample %in% cell_line_order, ]
 # Sort dc2 by cell line order
 dc3 <- dc2[match(cell_line_order, dc2$Sample), ]
 colors = add.alpha(as.character(dc3$color_map), 0.7)
-colored_bars(colors=colors, dend=hcd, rowLabels="")
+dc4 <-  as.data.frame(dc3$Receptor_Status)
+colnames(dc4) <- "Receptor_status"
+rownames(dc4) <- dc3$Sample
+rs_colors <- add.alpha(c("red", "#1F78B4","orange2", '#33A02C'), 0.9)
+#rs_colors <- add.alpha(c("gray", "#1F78B4","#FB9A99", '#33A02C'), 0.9)
+#rs_colors <- c('blue', 'black', 'red', 'green')
+names(rs_colors) <- c('NM', 'HER2amp', 'TNBC', 'HR+')
+anno_colors <- list(Receptor_status=rs_colors)
 
-#------------------
-p1 <- ggplot(dend_data$segments) +
-  geom_segment(aes(x = x, y = y, xend = xend, yend = yend))+
-  geom_text(data = dend_data$labels, aes(x, y, label = label),
-            hjust = 1, angle = 90, size = 3) +ylim(-100, 450) + theme_void() + scale_x_continuous(expand=c(0.02,0.02))
+gg1 <- pheatmap(dft,
+               color=0, cellwidth=0, legend=FALSE,
+               cluster_cols=FALSE, show_colnames=FALSE,
+               annotation_row=dc4, annotation_colors=anno_colors,
+               annotation_names_row=FALSE, annotation_legend = FALSE,
+               main='mRNA')
 
-p2 <- ggplot(dc3, aes(x=Sample, y=0.2, fill=Receptor_Status)) +geom_tile() + 
-  theme(legend.position="none") + theme(axis.title=element_blank(),
-        axis.ticks=element_blank(),
-        axis.text=element_blank(),
-        legend.position="none")
+# protein (iBAQ) dendrogram
+# ----------------------------------------------------------------------------------
+file <- synGet('syn7437201')
+dfr <- read.table(file$path, stringsAsFactor = TRUE, 
+                  header=TRUE, row.names='Uniprot_Id', sep=',')
+df <- dfr[, 2:37]
+dft <- t(df)
+rownames(dft) <- colnames(df)
+colnames(dft) <- rownames(df)
 
-gp1<-ggplotGrob(p1)
-gp2<-ggplotGrob(p2)  
+cell_line_order <- rownames(dft)#[hc$order]
+# Get cell line categories
+# dc <- as.data.frame(read_csv('cell_lines_categories.csv'))
+dc2 <- dc[dc$Sample %in% cell_line_order, ]
+# Sort dc2 by cell line order
+dc3 <- dc2[match(cell_line_order, dc2$Sample), ]
+colors = add.alpha(as.character(dc3$color_map), 0.7)
+dc4 <-  as.data.frame(dc3$Receptor_Status)
+colnames(dc4) <- "Receptor_status"
+rownames(dc4) <- dc3$Sample
+rs_colors <- add.alpha(c("red", "#1F78B4","orange2", '#33A02C'), 0.9)
+#rs_colors <- add.alpha(c("gray", "#1F78B4","#FB9A99", '#33A02C'), 0.9)
+#rs_colors <- c('blue', 'black', 'red', 'green')
+names(rs_colors) <- c('NM', 'HER2amp', 'TNBC', 'HR+')
+anno_colors <- list(Receptor_status=rs_colors)
 
-maxWidth = grid::unit.pmax(gp1$widths[2:5], gp2$widths[2:5])
-gp1$widths[2:5] <- as.list(maxWidth)
-gp2$widths[2:5] <- as.list(maxWidth)
+gg2 <- pheatmap(dft,
+                color=0, cellwidth=0, legend=FALSE,
+                cluster_cols=FALSE, show_colnames=FALSE,
+                annotation_row=dc4, annotation_colors=anno_colors,
+                annotation_names_row=FALSE, annotation_legend=FALSE,
+                main='protein')
 
-grid.arrange(gp1, gp2, ncol=1,heights=c(9/10,1/10))
+# phosphoprotein dendrogram
+# ----------------------------------------------------------------------------------
+file <- synGet('syn7437201')
+dfr <- read.table(file$path, stringsAsFactor = TRUE, 
+                  header=TRUE, row.names='Uniprot_Id', sep=',')
+df <- dfr[, 2:37]
+dft <- t(df)
+rownames(dft) <- colnames(df)
+colnames(dft) <- rownames(df)
+
+cell_line_order <- rownames(dft)#[hc$order]
+# Get cell line categories
+# dc <- as.data.frame(read_csv('cell_lines_categories.csv'))
+dc2 <- dc[dc$Sample %in% cell_line_order, ]
+# Sort dc2 by cell line order
+dc3 <- dc2[match(cell_line_order, dc2$Sample), ]
+colors = add.alpha(as.character(dc3$color_map), 0.7)
+dc4 <-  as.data.frame(dc3$Receptor_Status)
+colnames(dc4) <- "Receptor_status"
+rownames(dc4) <- dc3$Sample
+rs_colors <- add.alpha(c("red", "#1F78B4","orange2", '#33A02C'), 0.9)
+#rs_colors <- add.alpha(c("gray", "#1F78B4","#FB9A99", '#33A02C'), 0.9)
+#rs_colors <- c('blue', 'black', 'red', 'green')
+names(rs_colors) <- c('NM', 'HER2amp', 'TNBC', 'HR+')
+anno_colors <- list(Receptor_status=rs_colors)
+
+gg3 <- pheatmap(dft,
+                color=0, cellwidth=0, legend=FALSE,
+                cluster_cols=FALSE, show_colnames=FALSE,
+                annotation_row=dc4, annotation_colors=anno_colors,
+                annotation_names_row=FALSE, annotation_legend=TRUE,
+                main='phosphoprotein')

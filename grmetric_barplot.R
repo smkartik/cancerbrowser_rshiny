@@ -2,6 +2,9 @@ library(shiny)
 library(ggplot2)
 library(scatterpie)
 
+# have on OWL dataset behind this drug response
+# ----------------------------------------------
+
 #gr_metric <- read.csv(file = "grmetrics_phase1.csv",
 #                      stringsAsFactors = TRUE, header = TRUE)
 #gr_values <- read.csv(file = "grvalues_phase1.csv",
