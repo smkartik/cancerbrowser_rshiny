@@ -267,7 +267,7 @@ body <- dashboardBody(
   ),
   
   fluidRow(
-    box(width=4,
+    box(width=4, title='GR dose response',
         fluidPage(
           fluidRow(
             column(12, selectInput('fit_option', '',
@@ -279,10 +279,10 @@ body <- dashboardBody(
             column(12, plotOutput("GRdose_response"))
           )
     )),
-    box(width=4,
+    box(width=4, title='Cell viability',
         plotOutput("incfrac_dead")
     ),
-    box(width=4,
+    box(width=4, title='Cell cycle distribution',
         fluidPage(
           fluidRow(
             column(12, selectInput('cc_option', '',
@@ -301,15 +301,14 @@ body <- dashboardBody(
 server <- function(input, output, session) {
   
   output$boxtitle <- renderText({
-    paste(input$agent, ' GR metrics across breast cancer cell lines')
+    drug_label = str_replace(input$agent, '_', '/')
+    paste(drug_label, ' GR metrics across breast cancer cell lines')
   })
   
   output$project_info <- renderUI({
-    url <- a("HMS LINCS Terms of USe", href="http://lincs.hms.harvard.edu/terms/", target="_blank")
+    url <- a("HMS LINCS Terms of Use", href="http://lincs.hms.harvard.edu/terms/", target="_blank")
     tagList(HTML(paste('<b>This open-access Shiny app is funded by NIH U54 grant HL127365. Please see the ', url, 'regarding use and citation of the published and unpublished data presented here.</br>',
             '<b>© 2020 Sorger Lab, Harvard Medical School</br>')))
-    #paste('This open-access Shiny app is funded by NIH U54 grant HL127365.\nPlease see the HMS LINCS Terms of Use regarding use and citation of the published and unpublished data presented here.\n
-#© 2020 Sorger Lab, Harvard Medical School')
   })
   
   output$lsp_logo <- renderImage({
@@ -379,6 +378,7 @@ server <- function(input, output, session) {
   output$GRdose_response <- renderPlot({
     ds <- gr_metric[gr_metric$agent == input$agent, ]
     ds$cell_line <- factor(ds$cell_line, levels = ds$cell_line[order(-ds$GR_AOC)])
+    drug_label = str_replace(input$agent, '_', '/')
     
     point <- nearPoints(ds, input$plot_click, xvar='cell_line', yvar='GR_AOC')
     if (dim(point)[1] >=1){
@@ -386,9 +386,11 @@ server <- function(input, output, session) {
       gr50 <- point$GR50
       gr_max <- point$GRmax
       
+      
       grc <- gr_values[gr_values$agent == input$agent & 
                          gr_values$cell_line == cell_line, ]
       grc$log10_conc <- log10(grc$concentration)
+      sc_conc <- unique(sapply(grc$log10_conc, function(x){formatC(10**x, format='e', digit=0)}))
       
       if (input$fit_option == 'sigmoidal'){
         dr <- sigmoidal_fit(input$agent, cell_line)
@@ -398,7 +400,7 @@ server <- function(input, output, session) {
       
       p <- ggplot() + geom_point(data=grc, aes_string(x='log10_conc', y='GRvalue'), color='blue', size=2, alpha=0.5) +
         geom_line(data=dr, aes_string(x='log10_conc', y='yfit'), color='black', size=2, alpha=0.5) +
-        xlab(expression(paste('log10 ', mu, 'M'))) + ylab('GR value') +
+        xlab(paste(drug_label, ' (µM)')) + ylab('GR value') +
         ggtitle(cell_line) +
         ylim(-1, 1.1) +
         #theme_bw() + 
@@ -408,7 +410,7 @@ server <- function(input, output, session) {
           #legend.title=element_blank(),
           axis.line=element_line(),
           axis.ticks=element_line(),
-          axis.text.x = element_text(size=12, face='bold'),
+          axis.text.x = element_text(size=10),
           axis.text.y = element_text(size=12, face='bold'),
           axis.text=element_text(size=14, face='bold')
         ) +
@@ -419,6 +421,14 @@ server <- function(input, output, session) {
         #geom_hline(yintercept=gr_max, alpha=0.5) +
         geom_segment(aes(x = log10(gr50), y = -1, xend = log10(gr50), yend = -0.8), 
                      color='purple', alpha=0.7, size=2)
+      cl <- unique(grc$log10_conc)
+      breaks = sort(cl[cl == round(cl)])
+      breaks = breaks[seq(1, length(breaks), 2)]
+      xlabels = sapply(breaks, function(x){formatC(10**x, format='e', digit=0)})
+      #p <- p + xlim(min(breaks)-0.25, max(breaks)+0.25) 
+      p <- p + scale_x_continuous(breaks=breaks, 
+                            labels=xlabels)
+        
       return(p)
     }
   },width=300, height=300)
@@ -426,7 +436,7 @@ server <- function(input, output, session) {
   output$incfrac_dead <- renderPlot({
     ds <- gr_metric[gr_metric$agent == input$agent, ]
     ds$cell_line <- factor(ds$cell_line, levels = ds$cell_line[order(-ds$GR_AOC)])
-    
+    drug_label = str_replace(input$agent, '_', '/')
     point <- nearPoints(ds, input$plot_click, xvar='cell_line', yvar='GR_AOC')
     if (dim(point)[1] >=1){
       cell_line <- as.character(point$cell_line)
@@ -443,7 +453,7 @@ server <- function(input, output, session) {
                           ymax=increase_fraction_dead+se), width=.1) +
         geom_line() +
         geom_point(size=3, shape=21, fill="white") +
-        xlab(expression(paste('log10 ', mu, 'M'))) + ylab('increase fraction dead') +
+        xlab(paste(drug_label, ' (µM)')) + ylab('increase fraction dead') +
         ggtitle(cell_line) +
         ylim(-0.05, 1) +
         #theme_bw() + 
@@ -453,12 +463,17 @@ server <- function(input, output, session) {
           #legend.title=element_blank(),
           axis.line=element_line(),
           axis.ticks=element_line(),
-          axis.text.x = element_text(size=12, face='bold'),
+          axis.text.x = element_text(size=10),
           axis.text.y = element_text(size=12, face='bold'),
           axis.text=element_text(size=14, face='bold')
         ) + 
         geom_hline(yintercept=1, alpha=0.5) +
         geom_hline(yintercept=0, alpha=0.5)
+      cl <- unique(grc$log10_conc)
+      breaks = sort(cl[cl == round(cl)])
+      xlabels = sapply(breaks, function(x){formatC(10**x, format='e', digit=0)})
+      p <- p + scale_x_continuous(breaks=breaks, 
+                                  labels=xlabels)
       return(p)
     }
   },width=300, height=300)
@@ -467,7 +482,8 @@ server <- function(input, output, session) {
   output$cellcycle_response <- renderPlot({
     ds <- gr_metric[gr_metric$agent == input$agent, ]
     ds$cell_line <- factor(ds$cell_line, levels = ds$cell_line[order(-ds$GR_AOC)])
-   
+    drug_label = str_replace(input$agent, '_', '/')
+    
     point <- nearPoints(ds, input$plot_click, xvar='cell_line', yvar='GR_AOC')
     if (dim(point)[1] >=1){
       cell_line <- as.character(point$cell_line)
@@ -483,7 +499,7 @@ server <- function(input, output, session) {
         geom_bar(position=pos, stat='identity') +
         scale_fill_manual(name='cell cycle phase', values=pie_colors) +
         guides( fill=guide_legend(title.position ="top")) +
-        xlab('') + ylab(ylabel) +
+        xlab(paste(drug_label, ' (µM)')) + ylab(ylabel) +
         theme(
           panel.background=element_blank(),
           axis.title=element_text(size=16, face="bold"),
@@ -497,6 +513,14 @@ server <- function(input, output, session) {
           legend.text = element_text(colour="black", size=12),
           legend.position='bottom'
       )
+      if (!is.na(cl$phase_count)){
+        lc <- unique(cl$log10_conc)
+        breaks = sort(lc[lc == round(lc)])
+        xlabels = sapply(breaks, function(x){formatC(10**x, format='e', digit=0)})
+        p <- p + scale_x_continuous(breaks=breaks, 
+                                    labels=xlabels)
+      }
+
       return(p)
     }
   },width=350, height=350)
