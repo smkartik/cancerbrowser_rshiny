@@ -203,8 +203,44 @@ make_cc_long_table <- function(agent, cell_line){
   return(long)
 }
  
+header = dashboardHeader(
+  #filename <- normalizePath('./www/LSP_Horiz-Logo.png'),
+  tags$li(
+    class = "dropdown",
+    #column(4, imageOutput('lsp_logo')),
+    tags$style(
+      ".main-header {max-height: 120px;
+      font-size:36px; 
+      font-weight:bold; 
+      line-height:100px;}"),
+    tags$style(
+      ".main-header .logo {height: 120px;
+      font-size:36px; 
+      font-weight:bold; 
+      line-height:100px;align:left;}"
+    )
+    ),
+  title = HTML(
+    "<div style = 'background-color:white; vertical-align:middle'>
+    <img src = 'LSP_Horiz-Logo.jpg' align = 'left' height = '100px'>
+    HMS LINCS Breast Cancer Browser
+    </div>"),
+  titleWidth = "92%"
+)
+#<img src = 'http://www.clipartbest.com/cliparts/nTX/8nj/nTX8njyEc.jpeg' align = 'left' height = '100px'>
+#{{imageOutput('lsp_logo')}}
+#<img src = '', align = 'left' height = '100px'>
 
 body <- dashboardBody(
+  fluidRow(
+    box(status='info', width = 12,
+        #title=Project information',
+        #verbatimTextOutput("project_info"),
+        uiOutput('project_info'),
+        tags$head(tags$style("#project_info{font-size:12px; font-style:italic; max-height:100px; background-color: solidwhite; text-align:center;}"))
+        #uiOutput("project_info")
+    )
+  ),
   # Select Drug
   fluidRow(
     column(3,
@@ -214,14 +250,12 @@ body <- dashboardBody(
                            selected='Flavopiridol')
                )
            ),
-    column(5,
-           box(status='info', width = 12,
-               title='Project information',
-               verbatimTextOutput("project_info")
-               #tags$head(tafs$style("project_info{font-size:16px,}")),
-               #uiOutput("project_info")
-           )),
-    column(4, img(src='LSP_Horiz-Logo.pdf'))
+    column(4,
+           box(title='', width=12)
+),
+    column(4,
+           box(title='Nominal targets', width=12))  
+  #column(4, imageOutput('lsp_logo'))
   ),
   
   fluidRow(
@@ -264,14 +298,25 @@ body <- dashboardBody(
   )
 )
 
-server <- function(input, output) {
+server <- function(input, output, session) {
   
   output$boxtitle <- renderText({
     paste(input$agent, ' GR metrics across breast cancer cell lines')
   })
   
-  output$project_info <- renderText({
-    paste('The datasets visualized in this app were collected and analyzed as part of the "The Library of Integrated Network-Based Cellular Signatures" (LINCS) programe and funded by the NIH Common Fund program (U54 grant HL127365).\nThe datasets are currently available under a Creative Commons License CC BY 4.0')
+  output$project_info <- renderUI({
+    url <- a("HMS LINCS Terms of USe", href="http://lincs.hms.harvard.edu/terms/", target="_blank")
+    tagList(HTML(paste('<b>This open-access Shiny app is funded by NIH U54 grant HL127365. Please see the ', url, 'regarding use and citation of the published and unpublished data presented here.</br>',
+            '<b>© 2020 Sorger Lab, Harvard Medical School</br>')))
+    #paste('This open-access Shiny app is funded by NIH U54 grant HL127365.\nPlease see the HMS LINCS Terms of Use regarding use and citation of the published and unpublished data presented here.\n
+#© 2020 Sorger Lab, Harvard Medical School')
+  })
+  
+  output$lsp_logo <- renderImage({
+    filename <- normalizePath('./www/LSP_Horiz-Logo.png')
+    list(src=filename,
+         width = 400,
+         height = 100)
   })
   
   output$gr_metrics <- renderPlot({
@@ -460,9 +505,11 @@ server <- function(input, output) {
 
 shinyApp(
   ui = dashboardPage(
-    dashboardHeader(title = "LINCS Cancer Browser", titleWidth = 400),
+    header,
+    #dashboardHeader(title = "HMS LINCS Breast Cancer Browser", titleWidth = 600),
     dashboardSidebar(disable = TRUE),
-    body
+    body,
+    skin='black'
   ),
   server = server
 )
