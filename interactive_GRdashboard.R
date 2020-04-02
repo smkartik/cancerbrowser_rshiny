@@ -30,6 +30,12 @@ library(tidyr)
 #gr_values$cell_line <- as.character(gr_values$cell_line)
 
 load('data.RData')
+#control_drugs <- c('Actinomycin D', 'DMSO', 'GSK2126458', 
+#                   'Paclitaxel_pos', 'Storausporin', 'Vincristin' )
+#gr_metric <- gr_metric[!gr_metric$agent %in% control_drugs, ]
+
+#cm <- read.csv('compound_metadata.csv')
+
 
 
 # Define color palette
@@ -204,10 +210,9 @@ make_cc_long_table <- function(agent, cell_line){
 }
  
 header = dashboardHeader(
-  #filename <- normalizePath('./www/LSP_Horiz-Logo.png'),
+  # from https://stackoverflow.com/questions/48978648/align-header-elements-in-shiny-dashboard
   tags$li(
     class = "dropdown",
-    #column(4, imageOutput('lsp_logo')),
     tags$style(
       ".main-header {max-height: 120px;
       font-size:36px; 
@@ -217,7 +222,7 @@ header = dashboardHeader(
       ".main-header .logo {height: 120px;
       font-size:36px; 
       font-weight:bold; 
-      line-height:100px;align:left;}"
+      line-height:100px;align}"
     )
     ),
   title = HTML(
@@ -243,7 +248,7 @@ body <- dashboardBody(
   ),
   # Select Drug
   fluidRow(
-    column(3,
+    column(4,
            box(status='primary', width=12,
                selectInput("agent", "Select drug of interest:",
                            choices=as.character(unique(gr_metric$agent)),
@@ -251,15 +256,18 @@ body <- dashboardBody(
                )
            ),
     column(4,
-           box(title='', width=12)
+           box(title='Nominal targets', width=12,
+               verbatimTextOutput('nominal_targets'))
 ),
     column(4,
-           box(title='Nominal targets', width=12))  
+           box(title='HMS LINCS small molecules DB', width=12,
+           uiOutput('hmsl_id'),
+           tags$head(tags$style("#hmsl_id{font-size:20px;}")))) 
   #column(4, imageOutput('lsp_logo'))
   ),
   
   fluidRow(
-  box(title=textOutput('boxtitle'), width=8,
+  box(title=textOutput('boxtitle'), width=10,
     plotOutput("gr_metrics", click = "plot_click", 
                hover = hoverOpts("plot_hover", delay = 10, delayType = "debounce")),
     uiOutput("hover_info")
@@ -316,6 +324,20 @@ server <- function(input, output, session) {
     list(src=filename,
          width = 400,
          height = 100)
+  })
+  
+  output$nominal_targets <- renderText({
+    drug_label = str_replace(input$agent, '_', '/')
+    targets <- cm[cm$agent == drug_label, 'nominal_target']
+    paste(targets)
+  })
+  
+  output$hmsl_id <- renderUI({
+    drug_label = str_replace(input$agent, '_', '/')
+    lincs_id <- cm[cm$agent == drug_label, 'hmsl_id']
+    url <- a(lincs_id, href=sprintf('http://lincs.hms.harvard.edu/db/sm/%s/', lincs_id),
+             target='_blank')
+    tagList(HTML(paste(url)))
   })
   
   output$gr_metrics <- renderPlot({
@@ -528,7 +550,7 @@ server <- function(input, output, session) {
 
 
 shinyApp(
-  ui = dashboardPage(
+  ui = dashboardPage(title='HMS LINCS BRCA Browser',
     header,
     #dashboardHeader(title = "HMS LINCS Breast Cancer Browser", titleWidth = 600),
     dashboardSidebar(disable = TRUE),
