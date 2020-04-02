@@ -267,10 +267,10 @@ body <- dashboardBody(
   ),
   
   fluidRow(
-  box(title=textOutput('boxtitle'), width=10,
+  box(title=textOutput('boxtitle'), width=12,
     plotOutput("gr_metrics", click = "plot_click", 
-               hover = hoverOpts("plot_hover", delay = 10, delayType = "debounce")),
-    uiOutput("hover_info")
+               hover = hoverOpts("plot_hover", delay = 10, delayType = "debounce"))
+    #uiOutput("hover_info")
   )
   ),
   
@@ -343,12 +343,11 @@ server <- function(input, output, session) {
   output$gr_metrics <- renderPlot({
     ds <- gr_metric[gr_metric$agent == input$agent, ]
     ds$cell_line <- factor(ds$cell_line, levels = ds$cell_line[order(-ds$GR_AOC)])
-    p <- ggplot(data=ds) + 
-      geom_point(aes_string(x='cell_line', y='GR_AOC', 
-                            color='receptor_status'),
-                 size=5, alpha=0.7) +
+    p <- ggplot(data=ds, aes_string(x='cell_line', y='GR_AOC', fill='receptor_status')) + 
+      geom_bar( stat='identity')+#,
+       #          size=5, alpha=0.7) +
       # geom_label_repel(data=ds, aes_string(x='rank', y='GR_AOC', label='cell_line')) +
-      scale_color_manual(name='Receptor status', values = rs_colors) +#, name='Receptor status') +
+      scale_fill_manual(name='Receptor status', values = rs_colors) +#, name='Receptor status') +
       theme_bw() +
       theme(
         axis.text.x = element_text(angle=90, size=10, face='bold', hjust=0.95),
@@ -402,101 +401,111 @@ server <- function(input, output, session) {
     ds$cell_line <- factor(ds$cell_line, levels = ds$cell_line[order(-ds$GR_AOC)])
     drug_label = str_replace(input$agent, '_', '/')
     
-    point <- nearPoints(ds, input$plot_click, xvar='cell_line', yvar='GR_AOC')
-    if (dim(point)[1] >=1){
+    if (is.null(input$plot_click$x)) return()
+    else{ 
+      keeprows <- round(input$plot_click$x) == as.numeric(ds$cell_line)
+      point <- ds[keeprows, ]
       cell_line <- as.character(point$cell_line)
       gr50 <- point$GR50
       gr_max <- point$GRmax
-      
-      
-      grc <- gr_values[gr_values$agent == input$agent & 
-                         gr_values$cell_line == cell_line, ]
-      grc$log10_conc <- log10(grc$concentration)
-      sc_conc <- unique(sapply(grc$log10_conc, function(x){formatC(10**x, format='e', digit=0)}))
-      
-      if (input$fit_option == 'sigmoidal'){
-        dr <- sigmoidal_fit(input$agent, cell_line)
-      } else if (input$fit_option == 'biphasic'){
-        dr <- biphasic_fit(input$agent, cell_line)
-      }
-      
-      p <- ggplot() + geom_point(data=grc, aes_string(x='log10_conc', y='GRvalue'), color='blue', size=2, alpha=0.5) +
-        geom_line(data=dr, aes_string(x='log10_conc', y='yfit'), color='black', size=2, alpha=0.5) +
-        xlab(paste(drug_label, ' (µM)')) + ylab('GR value') +
-        ggtitle(cell_line) +
-        ylim(-1, 1.1) +
-        #theme_bw() + 
-        theme(
-          panel.background=element_blank(),
-          axis.title=element_text(size=16, face="bold"),
-          #legend.title=element_blank(),
-          axis.line=element_line(),
-          axis.ticks=element_line(),
-          axis.text.x = element_text(size=10),
-          axis.text.y = element_text(size=12, face='bold'),
-          axis.text=element_text(size=14, face='bold')
-        ) +
-        #coord_equal() +
-        geom_hline(yintercept=1, alpha=0.5) + 
-        geom_hline(yintercept=0, alpha=0.5) +
-        geom_hline(yintercept=-1, alpha=0.5) +
-        #geom_hline(yintercept=gr_max, alpha=0.5) +
-        geom_segment(aes(x = log10(gr50), y = -1, xend = log10(gr50), yend = -0.8), 
-                     color='purple', alpha=0.7, size=2)
-      cl <- unique(grc$log10_conc)
-      breaks = sort(cl[cl == round(cl)])
-      breaks = breaks[seq(1, length(breaks), 2)]
-      xlabels = sapply(breaks, function(x){formatC(10**x, format='e', digit=0)})
-      #p <- p + xlim(min(breaks)-0.25, max(breaks)+0.25) 
-      p <- p + scale_x_continuous(breaks=breaks, 
-                            labels=xlabels)
+      gr_aoc <- point$GR_AOC
+      if ((between(input$plot_click$y, 0, gr_aoc)) | (between(input$plot_click$y, gr_aoc, 0))){
+        grc <- gr_values[gr_values$agent == input$agent & 
+                           gr_values$cell_line == cell_line, ]
+        grc$log10_conc <- log10(grc$concentration)
+        sc_conc <- unique(sapply(grc$log10_conc, function(x){formatC(10**x, format='e', digit=0)}))
         
-      return(p)
+        if (input$fit_option == 'sigmoidal'){
+          dr <- sigmoidal_fit(input$agent, cell_line)
+        } else if (input$fit_option == 'biphasic'){
+          dr <- biphasic_fit(input$agent, cell_line)
+        }
+        
+        p <- ggplot() + geom_point(data=grc, aes_string(x='log10_conc', y='GRvalue'), color='blue', size=2, alpha=0.5) +
+          geom_line(data=dr, aes_string(x='log10_conc', y='yfit'), color='black', size=2, alpha=0.5) +
+          xlab(paste(drug_label, ' (µM)')) + ylab('GR value') +
+          ggtitle(cell_line) +
+          ylim(-1, 1.1) +
+          #theme_bw() + 
+          theme(
+            panel.background=element_blank(),
+            axis.title=element_text(size=16, face="bold"),
+            #legend.title=element_blank(),
+            axis.line=element_line(),
+            axis.ticks=element_line(),
+            axis.text.x = element_text(size=10),
+            axis.text.y = element_text(size=12, face='bold'),
+            axis.text=element_text(size=14, face='bold')
+          ) +
+          #coord_equal() +
+          geom_hline(yintercept=1, alpha=0.5) + 
+          geom_hline(yintercept=0, alpha=0.5) +
+          geom_hline(yintercept=-1, alpha=0.5) +
+          #geom_hline(yintercept=gr_max, alpha=0.5) +
+          geom_segment(aes(x = log10(gr50), y = -1, xend = log10(gr50), yend = -0.8), 
+                       color='purple', alpha=0.7, size=2)
+        cl <- unique(grc$log10_conc)
+        breaks = sort(cl[cl == round(cl)])
+        breaks = breaks[seq(1, length(breaks), 2)]
+        xlabels = sapply(breaks, function(x){formatC(10**x, format='e', digit=0)})
+        #p <- p + xlim(min(breaks)-0.25, max(breaks)+0.25) 
+        p <- p + scale_x_continuous(breaks=breaks, 
+                                    labels=xlabels)
+        
+        return(p)
+      } else return()
     }
+    #point <- nearPoints(ds, input$plot_click, xvar='cell_line', yvar='GR_AOC')
+    #if (dim(point)[1] >=1){
   },width=300, height=300)
   
   output$incfrac_dead <- renderPlot({
     ds <- gr_metric[gr_metric$agent == input$agent, ]
     ds$cell_line <- factor(ds$cell_line, levels = ds$cell_line[order(-ds$GR_AOC)])
     drug_label = str_replace(input$agent, '_', '/')
-    point <- nearPoints(ds, input$plot_click, xvar='cell_line', yvar='GR_AOC')
-    if (dim(point)[1] >=1){
+    
+    if (is.null(input$plot_click$x)) return()
+    else{ 
+      keeprows <- round(input$plot_click$x) == as.numeric(ds$cell_line)
+      point <- ds[keeprows, ]
       cell_line <- as.character(point$cell_line)
       gr50 <- point$GR50
       gr_max <- point$GRmax
-      
-      grc <- gr_values[gr_values$agent == input$agent & 
-                         gr_values$cell_line == cell_line, ]
-      grc$log10_conc <- log10(grc$concentration)
-      tgc <- summarySE(grc, measurevar="increase_fraction_dead", groupvars=c("log10_conc"))
-      
-      p <- ggplot(tgc, aes_string(x='log10_conc', y='increase_fraction_dead')) + 
-        geom_errorbar(aes(ymin=increase_fraction_dead-se, 
-                          ymax=increase_fraction_dead+se), width=.1) +
-        geom_line() +
-        geom_point(size=3, shape=21, fill="white") +
-        xlab(paste(drug_label, ' (µM)')) + ylab('increase fraction dead') +
-        ggtitle(cell_line) +
-        ylim(-0.05, 1) +
-        #theme_bw() + 
-        theme(
-          panel.background=element_blank(),
-          axis.title=element_text(size=16, face="bold"),
-          #legend.title=element_blank(),
-          axis.line=element_line(),
-          axis.ticks=element_line(),
-          axis.text.x = element_text(size=10),
-          axis.text.y = element_text(size=12, face='bold'),
-          axis.text=element_text(size=14, face='bold')
-        ) + 
-        geom_hline(yintercept=1, alpha=0.5) +
-        geom_hline(yintercept=0, alpha=0.5)
-      cl <- unique(grc$log10_conc)
-      breaks = sort(cl[cl == round(cl)])
-      xlabels = sapply(breaks, function(x){formatC(10**x, format='e', digit=0)})
-      p <- p + scale_x_continuous(breaks=breaks, 
-                                  labels=xlabels)
-      return(p)
+      gr_aoc <- point$GR_AOC
+      if ((between(input$plot_click$y, 0, gr_aoc)) | (between(input$plot_click$y, gr_aoc, 0))){
+        grc <- gr_values[gr_values$agent == input$agent & 
+                           gr_values$cell_line == cell_line, ]
+        grc$log10_conc <- log10(grc$concentration)
+        tgc <- summarySE(grc, measurevar="increase_fraction_dead", groupvars=c("log10_conc"))
+        
+        p <- ggplot(tgc, aes_string(x='log10_conc', y='increase_fraction_dead')) + 
+          geom_errorbar(aes(ymin=increase_fraction_dead-se, 
+                            ymax=increase_fraction_dead+se), width=.1) +
+          geom_line() +
+          geom_point(size=3, shape=21, fill="white") +
+          xlab(paste(drug_label, ' (µM)')) + ylab('increase fraction dead') +
+          ggtitle(cell_line) +
+          ylim(-0.05, 1) +
+          #theme_bw() + 
+          theme(
+            panel.background=element_blank(),
+            axis.title=element_text(size=16, face="bold"),
+            #legend.title=element_blank(),
+            axis.line=element_line(),
+            axis.ticks=element_line(),
+            axis.text.x = element_text(size=10),
+            axis.text.y = element_text(size=12, face='bold'),
+            axis.text=element_text(size=14, face='bold')
+          ) + 
+          geom_hline(yintercept=1, alpha=0.5) +
+          geom_hline(yintercept=0, alpha=0.5)
+        cl <- unique(grc$log10_conc)
+        breaks = sort(cl[cl == round(cl)])
+        xlabels = sapply(breaks, function(x){formatC(10**x, format='e', digit=0)})
+        p <- p + scale_x_continuous(breaks=breaks, 
+                                    labels=xlabels)
+        return(p)
+      } else return()
     }
   },width=300, height=300)
   
@@ -506,44 +515,50 @@ server <- function(input, output, session) {
     ds$cell_line <- factor(ds$cell_line, levels = ds$cell_line[order(-ds$GR_AOC)])
     drug_label = str_replace(input$agent, '_', '/')
     
-    point <- nearPoints(ds, input$plot_click, xvar='cell_line', yvar='GR_AOC')
-    if (dim(point)[1] >=1){
+    if (is.null(input$plot_click$x)) return()
+    else{ 
+      keeprows <- round(input$plot_click$x) == as.numeric(ds$cell_line)
+      point <- ds[keeprows, ]
       cell_line <- as.character(point$cell_line)
-      cl <- make_cc_long_table(input$agent, cell_line)
-      cl$phase <- factor(cl$phase, levels = c('M', 'beyondG2', 'G2', 'S_dropout', 'S', 'G1', 'subG1'))
-      if (input$cc_option == 'fraction'){
-        pos='fill'
-        ylabel='cell cycle fraction'} else if (
-        input$cc_option == 'cell count'){
-          pos='stack'
-          ylabel='# cells'}
-      p <- ggplot(cl, aes(fill=phase, y=phase_count, x=log10_conc)) + 
-        geom_bar(position=pos, stat='identity') +
-        scale_fill_manual(name='cell cycle phase', values=pie_colors) +
-        guides( fill=guide_legend(title.position ="top")) +
-        xlab(paste(drug_label, ' (µM)')) + ylab(ylabel) +
-        theme(
-          panel.background=element_blank(),
-          axis.title=element_text(size=16, face="bold"),
-        #legend.title=element_blank(),
-          axis.line=element_line(),
-          axis.ticks=element_line(),
-          axis.text.x = element_text(size=12, face='bold'),
-          axis.text.y = element_text(size=12, face='bold'),
-          axis.text=element_text(size=14, face='bold'),
-          legend.title = element_text(colour="black", size=14, face='bold'),
-          legend.text = element_text(colour="black", size=12),
-          legend.position='bottom'
-      )
-      if (!is.na(cl$phase_count)){
-        lc <- unique(cl$log10_conc)
-        breaks = sort(lc[lc == round(lc)])
-        xlabels = sapply(breaks, function(x){formatC(10**x, format='e', digit=0)})
-        p <- p + scale_x_continuous(breaks=breaks, 
-                                    labels=xlabels)
-      }
-
-      return(p)
+      gr50 <- point$GR50
+      gr_max <- point$GRmax
+      gr_aoc <- point$GR_AOC
+      if ((between(input$plot_click$y, 0, gr_aoc)) | (between(input$plot_click$y, gr_aoc, 0))){
+        cl <- make_cc_long_table(input$agent, cell_line)
+        cl$phase <- factor(cl$phase, levels = c('M', 'beyondG2', 'G2', 'S_dropout', 'S', 'G1', 'subG1'))
+        if (input$cc_option == 'fraction'){
+          pos='fill'
+          ylabel='cell cycle fraction'} else if (
+            input$cc_option == 'cell count'){
+            pos='stack'
+            ylabel='# cells'}
+        p <- ggplot(cl, aes(fill=phase, y=phase_count, x=log10_conc)) + 
+          geom_bar(position=pos, stat='identity') +
+          scale_fill_manual(name='cell cycle phase', values=pie_colors) +
+          guides( fill=guide_legend(title.position ="top")) +
+          xlab(paste(drug_label, ' (µM)')) + ylab(ylabel) +
+          theme(
+            panel.background=element_blank(),
+            axis.title=element_text(size=16, face="bold"),
+            #legend.title=element_blank(),
+            axis.line=element_line(),
+            axis.ticks=element_line(),
+            axis.text.x = element_text(size=12, face='bold'),
+            axis.text.y = element_text(size=12, face='bold'),
+            axis.text=element_text(size=14, face='bold'),
+            legend.title = element_text(colour="black", size=14, face='bold'),
+            legend.text = element_text(colour="black", size=12),
+            legend.position='bottom'
+          )
+        if (!is.na(cl$phase_count)){
+          lc <- unique(cl$log10_conc)
+          breaks = sort(lc[lc == round(lc)])
+          xlabels = sapply(breaks, function(x){formatC(10**x, format='e', digit=0)})
+          p <- p + scale_x_continuous(breaks=breaks, 
+                                      labels=xlabels)
+        }
+        return(p)
+      } else return()
     }
   },width=350, height=350)
 }
