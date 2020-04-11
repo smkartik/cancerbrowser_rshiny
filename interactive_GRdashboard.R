@@ -54,37 +54,82 @@ names(pie_colors) <- c('beyondG2', 'S_dropout', 'subG1', 'G1', 'G2', 'M', 'S')
 
 # Genetic functions
 # -----------------
-sigmoidal_fit <- function(drug, cell_line){    
+sigmoidal_fit <- function(drug, cell_line, measure='GRvalue', low_high=NULL){    
   grc <- gr_values[gr_values$agent == drug & 
                      gr_values$cell_line == cell_line, ]
   grc$log10_conc <- log10(grc$concentration)
   
   grm <- gr_metric[gr_metric$agent == drug & 
                      gr_metric$cell_line == cell_line, ]
-
+  
+  conc <- grc$concentration
   cc <- grc$log10_conc
-  param_df = tibble::tribble(
+  
+  ec50_low = log10(max(c(min(unlist(conc)) * 1e-4, 1e-7))) 
+  ec50_high = log10(min(c(max(unlist(conc)) * 1e2, 1e2))) 
+  
+  p_sig_GR = tibble::tribble(
     ~parameter,                 ~lower,     ~prior,    ~upper,
     "GRinf",                       -1,        0.1,         1, 
     "log10_GEC50", min(unlist(cc))-2, median(unlist(cc)), max(unlist(cc))+2,
     "h_GR",                         0.1,          2,         5
   )
   
-  opfct_sig = function(x, p) {
-    p[1] + (1 - p[1])/(1 + (10^x / (10^p[2])) ^ p[3])
+  p_sig_GR_static =  tibble::tribble(
+    ~parameter,                 ~lower,     ~prior,    ~upper,
+    "GRinf",                       0,        0.5,         1, 
+    "log10_GEC50", min(unlist(cc))-2, median(unlist(cc)), max(unlist(cc))+2,
+    "h_GR",                         0.1,          2,         5
+  )
+  
+  p_sig_GR_toxic = tibble::tribble(
+    ~parameter,                 ~lower,     ~prior,    ~upper,
+    "GRinf",                       -1,        -0.5,         0, 
+    "log10_GEC50", min(unlist(cc))-2, median(unlist(cc)), max(unlist(cc))+2,
+    "h_GR",                         0.1,          2,         5
+  )
+  
+  p_sig_GR_low = tibble::tribble(
+    ~parameter,                 ~lower,     ~prior,    ~upper,
+    "GRinf",                     -.05,        0.1,            1, 
+    "log10_GEC50",          ec50_low, median(unlist(cc)),   log10(1),
+    "h_GR",                       0.025,          2,          5
+  )
+  
+  ### priors and upper/lower bounds for high/late sigmoid fit (GR)
+  p_sig_GR_high = tibble::tribble(
+    ~parameter,                 ~lower,     ~prior,    ~upper,
+    "GRinf",                       -1,       -0.1,        0, 
+    "log10_GEC50",            log10(0.3),   log10(1),   ec50_high,
+    "h_GR",                       0.025,          2,      5
+  )
+  
+  
+  param_list <- list(p_sig_GR, p_sig_GR_static, p_sig_GR_toxic, p_sig_GR_low, p_sig_GR_toxic)
+  names(param_list) <- c('GRvalue', 'GR_static', 'GR_toxic', 'GRvalue_low', 'GRvalue_high')
+  
+  if (!is.null(low_high)){
+    param_choice = sprintf("%s_%s", measure, low_high)
+  } else {param_choice=measure}
+  param_df <- param_list[param_choice][[1]]
+  
+  
+  opfct_sig = function(x, p, bound=1) {
+    p[1] + (bound - p[1])/(1 + (10^x / (10^p[2])) ^ p[3])
   }
   
-  sum_square_sig = function(x, y, p) {sum((y - opfct_sig(x, p))^2)}
+  sum_square_sig = function(x, y, p, bound=1) {sum((y - opfct_sig(x, p, bound))^2)}
   
   startVec = param_df$prior
   psVec <- abs(startVec)
   psVec[psVec < 1e-4] <- 1
   
   xx <- grc$concentration
-  yy <- grc$GRvalue
-    
+  yy <- grc[measure]
+  
+  if (measure == 'GR_toxic'){bound=0} else {bound=1}  
   fit = suppressMessages(try(optim(par = param_df$prior, control = list(maxit = 500, parscale = psVec),                    
-                                   function(p, x, y) sum_square_sig(x = log10(xx), y = yy, p = p),
+                                   function(p, x, y) sum_square_sig(x = log10(xx), y = yy, p = p, bound=bound),
                                    hessian = TRUE, method = "L-BFGS-B",
                                    lower = param_df$lower, upper = param_df$upper)))
   
@@ -94,13 +139,13 @@ sigmoidal_fit <- function(drug, cell_line){
   concentration = 10^(seq(log10(minc) - 1, log10(maxc) + 1, length.out = len))
   
   sig_fit <- unlist(sapply(concentration,
-                          function(x){fit$par[1] + (1-fit$par[1]) / (1 + (x / (10** fit$par[2])) ** fit$par[3])}))
+                          function(x){fit$par[1] + (bound-fit$par[1]) / (1 + (x / (10** fit$par[2])) ** fit$par[3])}))
                            
   dr <- data.frame(cc=concentration, yfit=sig_fit, log10_conc=log10(concentration))
   return(dr)
 }
 
-biphasic_fit <- function(drug, cell_line){    
+biphasic_fit <- function(drug, cell_line, measure='GRvalue'){    
   grc <- gr_values[gr_values$agent == drug & 
                      gr_values$cell_line == cell_line, ]
   grc$log10_conc <- log10(grc$concentration)
@@ -137,7 +182,7 @@ biphasic_fit <- function(drug, cell_line){
   psVec[psVec < 1e-4] <- 1
   
   xx <- grc$concentration
-  yy <- grc$GRvalue
+  yy <- grc[measure]
   
   fit = suppressMessages(try(optim(par = param_df$prior, control = list(maxit = 500, parscale = psVec),                    
                                    function(p, x, y) sum_square_biphasic(x = log10(xx), y = yy, p = p),
@@ -269,8 +314,14 @@ body <- dashboardBody(
   fluidRow(
   box(title=textOutput('boxtitle'), width=12,
     plotOutput("gr_metrics", click = "plot_click", 
-               hover = hoverOpts("plot_hover", delay = 10, delayType = "debounce"))
+               hover = hoverOpts("plot_hover", delay = 10, delayType = "debounce")),
     #uiOutput("hover_info")
+    #uiOutput("mouse_pointer"),
+    tags$head(tags$style("#gr_metrics{cursor:pointer;}"))
+    #tags$head(HTML('<style>{{uiOutput("mouse_pointer")}}</style>'))
+    
+    #gr_metrics{cursor:{{
+  
   )
   ),
   
@@ -278,11 +329,15 @@ body <- dashboardBody(
     box(width=4, title='GR dose response',
         fluidPage(
           fluidRow(
-            column(12, selectInput('fit_option', '',
+            column(6, selectInput('fit_option', 'Curve fit:',
                                    choices=c('sigmoidal', 'biphasic'),
                                    selected='sigmoidal')
-            )
-          ),
+            ),
+            column(6, 
+                   conditionalPanel(
+                     condition = "input.fit_option == 'sigmoidal'",
+                     checkboxInput("st_tox", "Show GR static & toxic response", FALSE))
+          )),
           fluidRow(
             column(12, plotOutput("GRdose_response"))
           )
@@ -293,7 +348,7 @@ body <- dashboardBody(
     box(width=4, title='Cell cycle distribution',
         fluidPage(
           fluidRow(
-            column(12, selectInput('cc_option', '',
+            column(12, selectInput('cc_option', 'Display as:',
                                    choices=c('fraction', 'cell count'),
                                    selected='fraction')
                    )
@@ -364,6 +419,7 @@ server <- function(input, output, session) {
     #plot(ds$GR_AOC, ds$mpg)
   })
   
+  # https://gitlab.com/snippets/16220
   output$hover_info <- renderUI({
     ds <- gr_metric[gr_metric$agent == input$agent, ]
     ds$cell_line <- factor(ds$cell_line, levels = ds$cell_line[order(-ds$GR_AOC)])
@@ -383,8 +439,8 @@ server <- function(input, output, session) {
     # create style property fot tooltip
     # background color is set so tooltip is a bit transparent
     # z-index is set so we are sure are tooltip will be on top
-    style <- paste0("position:absolute; z-index:100; background-color: rgba(245, 245, 245, 0.85); ",
-                    "right:", 0.5 * right_pct, "px; top:", top_pct, "px;")
+    style <- paste0("cursor: pointer; position:absolute; z-index:100; background-color: rgba(245, 245, 245, 0.85); ",
+                    "right:", 0.5 * right_px, "px; top:", top_px, "px;")
     
     # actual tooltip created as wellPanel
     wellPanel(
@@ -395,6 +451,21 @@ server <- function(input, output, session) {
     )
   })
   
+  output$mouse_pointer <- renderUI({
+    hover <- input$plot_hover
+    ds <- gr_metric[gr_metric$agent == input$agent, ]
+    tagList(
+      HTML(paste('#gr_metrics{cursor:pointer;}')))
+    #if (round(hover$x) == as.numeric(ds$cell_line)){
+    #  keeprows <- round(input$plot_click$x) == as.numeric(ds$cell_line)
+    #  point <- ds[keeprows, ]
+    #  gr_aoc <- point$GR_AOC
+    #}
+    #if ((round(hover$x) == as.numeric(ds$cell_line)) &
+    #    ((between(hover$y, 0, gr_aoc)) | (between(hover$y, gr_aoc, 0)))){
+    #  tags$style( '#{ cursor: pointer; }')
+    #}
+  })
   
   output$GRdose_response <- renderPlot({
     ds <- gr_metric[gr_metric$agent == input$agent, ]
@@ -413,16 +484,23 @@ server <- function(input, output, session) {
         grc <- gr_values[gr_values$agent == input$agent & 
                            gr_values$cell_line == cell_line, ]
         grc$log10_conc <- log10(grc$concentration)
+        tgc <- summarySE(grc, measurevar="GRvalue", groupvars=c("log10_conc"))
         sc_conc <- unique(sapply(grc$log10_conc, function(x){formatC(10**x, format='e', digit=0)}))
         
         if (input$fit_option == 'sigmoidal'){
           dr <- sigmoidal_fit(input$agent, cell_line)
         } else if (input$fit_option == 'biphasic'){
           dr <- biphasic_fit(input$agent, cell_line)
+          #dr_low <- sigmoidal_fit(input$agent, cell_line, low_high='low')
+          #dr_high <- sigmoidal_fit(input$agent, cell_line, low_high='high')#, measure='GR_toxic')
         }
         
-        p <- ggplot() + geom_point(data=grc, aes_string(x='log10_conc', y='GRvalue'), color='blue', size=2, alpha=0.5) +
+        p <- ggplot() + 
           geom_line(data=dr, aes_string(x='log10_conc', y='yfit'), color='black', size=2, alpha=0.5) +
+          geom_errorbar(data=tgc, aes(ymin=GRvalue-se, 
+                            ymax=GRvalue+se, x=log10_conc), width=.1) +
+          geom_point(data=tgc, aes_string(x='log10_conc', y='GRvalue'), fill='white', size=3, shape=21) +
+          
           xlab(paste(drug_label, ' (µM)')) + ylab('GR value') +
           ggtitle(cell_line) +
           ylim(-1, 1.1) +
@@ -451,7 +529,17 @@ server <- function(input, output, session) {
         #p <- p + xlim(min(breaks)-0.25, max(breaks)+0.25) 
         p <- p + scale_x_continuous(breaks=breaks, 
                                     labels=xlabels)
+        if (input$st_tox & input$fit_option=='sigmoidal'){
+          dr_static <- sigmoidal_fit(input$agent, cell_line, measure='GR_static')
+          dr_toxic <- sigmoidal_fit(input$agent, cell_line, measure='GR_toxic')
+          p <- p + geom_line(data=dr_static, aes_string(x='log10_conc', y='yfit'), color='green', size=2, alpha=0.5) +
+            geom_line(data=dr_toxic, aes_string(x='log10_conc', y='yfit'), color='red', size=2, alpha=0.5)
+        }
         
+        #if (input$fit_option=='biphasic'){
+        #  p <- p + geom_line(data=dr_low, aes_string(x='log10_conc', y='yfit'), color='black', linetype='dotted', size=0.5, alpha=0.5) +
+        #    geom_line(data=dr_high, aes_string(x='log10_conc', y='yfit'), color='black', linetype='dashed', size=0.5, alpha=0.5)
+        #}
         return(p)
       } else return()
     }
