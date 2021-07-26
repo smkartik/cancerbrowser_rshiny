@@ -1,40 +1,45 @@
 library(shinydashboard)
 library(shiny)
 library(ggplot2)
+library(plyr)
 library(dplyr)
 library(ggrepel)
 library(stringr)
 library(tidyr)
+library(caTools)
 
 
 # Load data files
 # ---------------
-#gr_metrics <- read.csv('data/gr_metrics_all.csv', row.names = 'X')
-#gr_values <- read.csv('data/grvalues_cellcycle_DDD.csv')
-#metadata <- read.csv('data/metadata.csv')
+gr_values <- data.table::fread('data/supplemental tables/gr_values_all.csv', data.table=FALSE)
+gr_values <- subset(gr_values, select=-c(V1))
+gr_metric <- data.table::fread('data/supplemental tables/gr_metrics_all.csv', data.table=FALSE)
+gr_metric <- subset(gr_metric, select=-c(V1))
+gr_cc <- data.table::fread('data/supplemental tables/cell_cycle_fractions_all.csv', data.table=FALSE)
+gr_cc <- subset(gr_cc, select=-c(V1))
+cm <- data.table::fread('data/supplemental tables/compound_metadata.csv', data.table=FALSE)
+control_drugs <- c('Actinomycin D', 'DMSO', 'GSK2126458', 
+                   'Paclitaxel_pos', 'Storausporin', 'Vincristin' )
+gr_metric <- gr_metric[!gr_metric$agent %in% control_drugs, ]
 
-#dfm = metadata[metadata$molecular_subtype != 'Bridge' & metadata$molecular_subtype != 'ovarian', ]
-#dfm$cell_line <- sapply(dfm$cell_line,  function(x){unlist(str_split(x, '[ (]'))[1]})
-#dfm$cell_line <- sapply(dfm$cell_line, function(x){str_replace(x, '-', '')})
-#dfm$cell_line <- sapply(dfm$cell_line, function(x){str_replace(x, '-', '')})
-#dfm$cell_line <- sapply(dfm$cell_line, function(x){str_replace(x, 'Hs578T', 'HS578T')})
-#dfm$cell_line <- sapply(dfm$cell_line, function(x){str_replace(x, 'hME1', 'HTERT_HME1')})
-#dfm <- dfm[c('cell_line', 'molecular_subtype', 'receptor_status')]
-#dfm <- rbind(dfm, data.frame(cell_line='MCF10A (GM)', molecular_subtype='Non malignant, Basal',
-#                             receptor_status='NM'))
-#gr_metric <- merge(gr_metrics, dfm, by.x='cell_line', by.y='cell_line')
-#gr_metric <- gr_metric %>% distinct()
-#gr_metric$cell_line <- as.character(gr_metric$cell_line)
+dfm = metadata[metadata$molecular_subtype != 'Bridge' & metadata$molecular_subtype != 'ovarian', ]
+dfm$cell_line <- sapply(dfm$cell_line,  function(x){unlist(str_split(x, '[ (]'))[1]})
+dfm$cell_line <- sapply(dfm$cell_line, function(x){str_replace(x, '-', '')})
+dfm$cell_line <- sapply(dfm$cell_line, function(x){str_replace(x, '-', '')})
+dfm$cell_line <- sapply(dfm$cell_line, function(x){str_replace(x, 'Hs578T', 'HS578T')})
+dfm$cell_line <- sapply(dfm$cell_line, function(x){str_replace(x, 'hME1', 'HTERT_HME1')})
+dfm <- dfm[c('cell_line', 'molecular_subtype', 'receptor_status')] %>% distinct()
+dfm <- rbind(dfm, data.frame(cell_line='MCF10A (GM)', molecular_subtype='Non malignant, Basal',
+                             receptor_status='NM'))
+gr_metric <- merge(gr_metric, dfm, by.x='cell_line', by.y='cell_line')
+gr_metric <- gr_metric %>% distinct()
+gr_metric$cell_line <- as.character(gr_metric$cell_line)
 
-#gr_values <- merge(gr_values, dfm, by.x='cell_line', by.y='cell_line')
-#gr_values$cell_line <- as.character(gr_values$cell_line)
+gr_values <- merge(gr_values, dfm, by.x='cell_line', by.y='cell_line')
+gr_values$cell_line <- as.character(gr_values$cell_line)
 
-load('data.RData')
-#control_drugs <- c('Actinomycin D', 'DMSO', 'GSK2126458', 
-#                   'Paclitaxel_pos', 'Storausporin', 'Vincristin' )
-#gr_metric <- gr_metric[!gr_metric$agent %in% control_drugs, ]
+#load('data.RData')
 
-#cm <- read.csv('compound_metadata.csv')
 
 
 
@@ -59,8 +64,8 @@ sigmoidal_fit <- function(drug, cell_line, measure='GRvalue', low_high=NULL){
                      gr_values$cell_line == cell_line, ]
   grc$log10_conc <- log10(grc$concentration)
   
-  grm <- gr_metric[gr_metric$agent == drug & 
-                     gr_metric$cell_line == cell_line, ]
+  #grm <- gr_metric[gr_metric$agent == drug & 
+  #                   gr_metric$cell_line == cell_line, ]
   
   conc <- grc$concentration
   cc <- grc$log10_conc
@@ -140,18 +145,67 @@ sigmoidal_fit <- function(drug, cell_line, measure='GRvalue', low_high=NULL){
   
   sig_fit <- unlist(sapply(concentration,
                           function(x){fit$par[1] + (bound-fit$par[1]) / (1 + (x / (10** fit$par[2])) ** fit$par[3])}))
-                           
+  
+  ec50 <- 10 ** fit$par[2]
+  #ic50 <- ec50 * ((0.5-1)/(fit$par[1]-0.5)) ** (1/fit$par[3])
+  
+  # Compute R-square
+  # -----------------
+  s2<- unlist(sapply(unique(conc),
+                           function(x){fit$par[1] + (bound-fit$par[1]) / (1 + (x / (10** fit$par[2])) ** fit$par[3])}))
+  dr2 <-  data.frame(cc=unique(conc), 'GRvalue_fit'=s2, log10_conc=log10(unique(conc)))
+  tgc <- summarySE(grc, measurevar="GRvalue", groupvars=c("log10_conc"))
+  mean_grv <- mean(tgc$GRvalue)
+  
+  ssreg <- sum(sapply(dr2$GRvalue_fit, function(x){(x - mean_grv) ** 2}))
+  sst <- sum(sapply(tgc$GRvalue, function(x){(x - mean_grv) ** 2}))
+  
+  tgc2 <- merge(tgc, dr2, by.x='log10_conc', by.y='log10_conc')
+  tgc2$residual <- mapply(function(x, y){(x-y)**2}, tgc2$GRvalue, tgc2$GRvalue_fit)
+  sse <- sum(tgc2$residual)
+  rsquare <- 1 - (sse/sst)
+  ####--------------------
+
   dr <- data.frame(cc=concentration, yfit=sig_fit, log10_conc=log10(concentration))
+  #dr$GR50 <- ic50
+  dr$GEC50 <- ec50
+  dr$GR_AOC <- compute_AOC(grc, measurevar=measure)
+  dr$GRmax <- compute_grmax(grc, measurevar=measure)
+  dr$GRinf <- fit$par[1]
+  #dr$log10_GEC50 <- fit$par[2]
+  dr$h_GR <- fit$par[3]
   return(dr)
 }
+
+
+compute_AOC <- function(data, measurevar='GRvalue', groupvar='log10_conc'){
+  tgc <- summarySE(data, measurevar=measurevar, groupvars=groupvar)
+  cc <- tgc[[groupvar]]
+  mean_measure <- tgc[[measurevar]]
+  if (measurevar == 'GR_toxic'){
+    upper_bound=0
+  } else {upper_bound=1}
+  AOC = caTools::trapz(x=cc, y=upper_bound-mean_measure)
+  aoc_norm <- AOC/(max(cc) - min(cc))
+  return(aoc_norm)
+}
+
+compute_grmax <- function(data, measurevar='GRvalue', groupvar='log10_conc'){
+  tgc <- summarySE(data, measurevar=measurevar, groupvars=groupvar)
+  cc <- tgc[[groupvar]]
+  mean_measure <- tgc[[measurevar]]
+  gmax <- min(tail(tgc[[measurevar]], 2))
+  return(gmax)
+}
+
 
 biphasic_fit <- function(drug, cell_line, measure='GRvalue'){    
   grc <- gr_values[gr_values$agent == drug & 
                      gr_values$cell_line == cell_line, ]
   grc$log10_conc <- log10(grc$concentration)
   
-  grm <- gr_metric[gr_metric$agent == drug & 
-                     gr_metric$cell_line == cell_line, ]
+  #grm <- gr_metric[gr_metric$agent == drug & 
+  #                   gr_metric$cell_line == cell_line, ]
   
   conc <- grc$concentration
   cc <- grc$log10_conc
@@ -203,8 +257,36 @@ biphasic_fit <- function(drug, cell_line, measure='GRvalue'){
   
   biphasic_fit <- unlist(sapply(concentration, create_biphasic_data))
   
+  # Compute R-square
+  # -----------------
+  s2<- unlist(sapply(unique(conc), create_biphasic_data))
+      
+  dr2 <-  data.frame(cc=unique(conc), 'GRvalue_fit'=s2, log10_conc=log10(unique(conc)))
+  tgc <- summarySE(grc, measurevar="GRvalue", groupvars=c("log10_conc"))
+  mean_grv <- mean(tgc$GRvalue)
+  
+  ssreg <- sum(sapply(dr2$GRvalue_fit, function(x){(x - mean_grv) ** 2}))
+  sst <- sum(sapply(tgc$GRvalue, function(x){(x - mean_grv) ** 2}))
+  
+  tgc2 <- merge(tgc, dr2, by.x='log10_conc', by.y='log10_conc')
+  tgc2$residual <- mapply(function(x, y){(x-y)**2}, tgc2$GRvalue, tgc2$GRvalue_fit)
+  sse <- sum(tgc2$residual)
+  rsquare <- 1 - (sse/sst)
+  ####--------------------
+  
+  
   dr <- data.frame(cc=concentration, yfit=biphasic_fit, log10_conc=log10(concentration))
-  return(dr)
+  #return(dr)
+  ec50_early <- 10 ** fit$par[2]
+  ic50_early <- ec50_early * ((1-fit$par[1])/(0.5-fit$par[1])-1) ** (1/fit$par[3])
+  
+  ec50_late <- 10 ** fit$par[5]
+  ic50_late <- ec50_late * ((1-fit$par[4])/(0.5-fit$par[4])-1) ** (1/fit$par[6])
+  
+  
+  res <- list(dr, fit, ic50_early, ic50_late)
+  names(res) <- c('fit_vals', 'fit_params', 'IC50_early', 'IC50_late')
+  return(res)
 }
 
 # Taken from http://www.cookbook-r.com/Manipulating_data/Summarizing_data/
@@ -245,12 +327,13 @@ summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
 }
 
 
-make_cc_long_table <- function(agent, cell_line){
+make_cc_long_table <- function(gr_values, agent, cell_line){
   grc <- gr_values[gr_values$agent == agent & gr_values$cell_line == cell_line, ]
   cc_cols <- c("G1", "S", "G2", "M", "S_dropout","subG1", "beyondG2")
   long <- gather(grc, phase, fraction, cc_cols, factor_key=T)
   long$log10_conc <- log10(long$concentration)
   long$phase_count <- mapply(function(x, y){x * y}, long$cell_count, long$fraction)
+  long <- summarySE(long, measurevar='phase_count', groupvars=c("log10_conc", 'phase'))
   return(long)
 }
  
@@ -371,7 +454,7 @@ server <- function(input, output, session) {
   output$project_info <- renderUI({
     url <- a("HMS LINCS Terms of Use", href="http://lincs.hms.harvard.edu/terms/", target="_blank")
     tagList(HTML(paste('<b>This open-access Shiny app is funded by NIH U54 grant HL127365. Please see the ', url, 'regarding use and citation of the published and unpublished data presented here.</br>',
-            '<b>© 2020 Sorger Lab, Harvard Medical School</br>')))
+            '<b>© 2021 Sorger Lab, Harvard Medical School</br>')))
   })
   
   output$lsp_logo <- renderImage({
@@ -597,14 +680,15 @@ server <- function(input, output, session) {
     }
   },width=300, height=300)
   
-  
+
+
   output$cellcycle_response <- renderPlot({
     ds <- gr_metric[gr_metric$agent == input$agent, ]
     ds$cell_line <- factor(ds$cell_line, levels = ds$cell_line[order(-ds$GR_AOC)])
     drug_label = str_replace(input$agent, '_', '/')
-    
+
     if (is.null(input$plot_click$x)) return()
-    else{ 
+    else{
       keeprows <- round(input$plot_click$x) == as.numeric(ds$cell_line)
       point <- ds[keeprows, ]
       cell_line <- as.character(point$cell_line)
@@ -612,40 +696,46 @@ server <- function(input, output, session) {
       gr_max <- point$GRmax
       gr_aoc <- point$GR_AOC
       if ((between(input$plot_click$y, 0, gr_aoc)) | (between(input$plot_click$y, gr_aoc, 0))){
-        cl <- make_cc_long_table(input$agent, cell_line)
-        cl$phase <- factor(cl$phase, levels = c('M', 'beyondG2', 'G2', 'S_dropout', 'S', 'G1', 'subG1'))
-        if (input$cc_option == 'fraction'){
-          pos='fill'
-          ylabel='cell cycle fraction'} else if (
-            input$cc_option == 'cell count'){
-            pos='stack'
-            ylabel='# cells'}
-        p <- ggplot(cl, aes(fill=phase, y=phase_count, x=log10_conc)) + 
-          geom_bar(position=pos, stat='identity') +
-          scale_fill_manual(name='cell cycle phase', values=pie_colors) +
-          guides( fill=guide_legend(title.position ="top")) +
-          xlab(paste(drug_label, ' (µM)')) + ylab(ylabel) +
-          theme(
-            panel.background=element_blank(),
-            axis.title=element_text(size=16, face="bold"),
-            #legend.title=element_blank(),
-            axis.line=element_line(),
-            axis.ticks=element_line(),
-            axis.text.x = element_text(size=12, face='bold'),
-            axis.text.y = element_text(size=12, face='bold'),
-            axis.text=element_text(size=14, face='bold'),
-            legend.title = element_text(colour="black", size=14, face='bold'),
-            legend.text = element_text(colour="black", size=12),
-            legend.position='bottom'
-          )
-        if (!is.na(cl$phase_count)){
-          lc <- unique(cl$log10_conc)
-          breaks = sort(lc[lc == round(lc)])
-          xlabels = sapply(breaks, function(x){formatC(10**x, format='e', digit=0)})
-          p <- p + scale_x_continuous(breaks=breaks, 
-                                      labels=xlabels)
+        cl <- make_cc_long_table(gr_cc, input$agent, cell_line) %>% drop_na()
+        if (dim(cl)[1] < 1){
+          plot(1,1,col="white", fg='white', axes=FALSE, xlab='', ylab='')
+          text(1,1,"cell cycle data was not collected\nfor this cell line-drug pair",
+               cex=1.4)
+          } else {
+          cl$phase <- factor(cl$phase, levels = c('M', 'beyondG2', 'G2', 'S_dropout', 'S', 'G1', 'subG1'))
+          if (input$cc_option == 'fraction'){
+            pos='fill'
+            ylabel='cell cycle fraction'} else if (
+              input$cc_option == 'cell count'){
+              pos='stack'
+              ylabel='# cells'}
+          p <- ggplot(cl, aes(fill=phase, y=phase_count, x=log10_conc)) +
+            geom_bar(position=pos, stat='identity') +
+            scale_fill_manual(name='cell cycle phase', values=pie_colors) +
+            guides( fill=guide_legend(title.position ="top")) +
+            xlab(paste(drug_label, ' (µM)')) + ylab(ylabel) +
+            theme(
+              panel.background=element_blank(),
+              axis.title=element_text(size=16, face="bold"),
+              #legend.title=element_blank(),
+              axis.line=element_line(),
+              axis.ticks=element_line(),
+              axis.text.x = element_text(size=12, face='bold'),
+              axis.text.y = element_text(size=12, face='bold'),
+              axis.text=element_text(size=14, face='bold'),
+              legend.title = element_text(colour="black", size=14, face='bold'),
+              legend.text = element_text(colour="black", size=12),
+              legend.position='bottom'
+            )
+          if (!is.na(cl$phase_count)){
+            lc <- unique(cl$log10_conc)
+            breaks = sort(lc[lc == round(lc)])
+            xlabels = sapply(breaks, function(x){formatC(10**x, format='e', digit=0)})
+            p <- p + scale_x_continuous(breaks=breaks,
+                                        labels=xlabels)
+          }
+          return(p)
         }
-        return(p)
       } else return()
     }
   },width=350, height=350)
@@ -653,12 +743,14 @@ server <- function(input, output, session) {
 
 
 shinyApp(
-  ui = dashboardPage(title='HMS LINCS BRCA Browser',
+  ui = dashboardPage(#title='HMS LINCS BRCA Browser',
     header,
     #dashboardHeader(title = "HMS LINCS Breast Cancer Browser", titleWidth = 600),
+    #dashboardHeader(),
     dashboardSidebar(disable = TRUE),
     body,
     skin='black'
   ),
   server = server
 )
+  
