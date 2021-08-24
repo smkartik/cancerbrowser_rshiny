@@ -11,34 +11,37 @@ library(caTools)
 
 # Load data files
 # ---------------
-gr_values <- data.table::fread('data/supplemental tables/gr_values_all.csv', data.table=FALSE)
-gr_values <- subset(gr_values, select=-c(V1))
-gr_metric <- data.table::fread('data/supplemental tables/gr_metrics_all.csv', data.table=FALSE)
-gr_metric <- subset(gr_metric, select=-c(V1))
-gr_cc <- data.table::fread('data/supplemental tables/cell_cycle_fractions_all.csv', data.table=FALSE)
-gr_cc <- subset(gr_cc, select=-c(V1))
-cm <- data.table::fread('data/supplemental tables/compound_metadata.csv', data.table=FALSE)
-control_drugs <- c('Actinomycin D', 'DMSO', 'GSK2126458', 
-                   'Paclitaxel_pos', 'Storausporin', 'Vincristin' )
-gr_metric <- gr_metric[!gr_metric$agent %in% control_drugs, ]
+#gr_values <- data.table::fread('data/supplemental tables/gr_values_all.csv', data.table=FALSE)
+#gr_values <- subset(gr_values, select=-c(V1))
+#gr_metric <- data.table::fread('data/supplemental tables/gr_metrics_all.csv', data.table=FALSE)
+#gr_metric <- subset(gr_metric, select=-c(V1))
+#gr_cc <- data.table::fread('data/supplemental tables/cell_cycle_fractions_all.csv', data.table=FALSE)
+#gr_cc <- subset(gr_cc, select=-c(V1))
+#cm <- data.table::fread('data/supplemental tables/compound_metadata.csv', data.table=FALSE)
+#control_drugs <- c('Actinomycin D', 'DMSO', 'GSK2126458', 
+#                   'Paclitaxel_pos', 'Storausporin', 'Vincristin' )
+#gr_metric <- gr_metric[!gr_metric$agent %in% control_drugs, ]
 
-dfm = metadata[metadata$molecular_subtype != 'Bridge' & metadata$molecular_subtype != 'ovarian', ]
-dfm$cell_line <- sapply(dfm$cell_line,  function(x){unlist(str_split(x, '[ (]'))[1]})
-dfm$cell_line <- sapply(dfm$cell_line, function(x){str_replace(x, '-', '')})
-dfm$cell_line <- sapply(dfm$cell_line, function(x){str_replace(x, '-', '')})
-dfm$cell_line <- sapply(dfm$cell_line, function(x){str_replace(x, 'Hs578T', 'HS578T')})
-dfm$cell_line <- sapply(dfm$cell_line, function(x){str_replace(x, 'hME1', 'HTERT_HME1')})
-dfm <- dfm[c('cell_line', 'molecular_subtype', 'receptor_status')] %>% distinct()
-dfm <- rbind(dfm, data.frame(cell_line='MCF10A (GM)', molecular_subtype='Non malignant, Basal',
-                             receptor_status='NM'))
-gr_metric <- merge(gr_metric, dfm, by.x='cell_line', by.y='cell_line')
-gr_metric <- gr_metric %>% distinct()
-gr_metric$cell_line <- as.character(gr_metric$cell_line)
+#metadata <- read.csv('data/metadata.csv')
+#dfm = metadata[metadata$molecular_subtype != 'Bridge' & metadata$molecular_subtype != 'ovarian', ]
+#dfm$cell_line <- sapply(dfm$cell_line,  function(x){unlist(str_split(x, '[ (]'))[1]})
+#dfm$cell_line <- sapply(dfm$cell_line, function(x){str_replace(x, '-', '')})
+#dfm$cell_line <- sapply(dfm$cell_line, function(x){str_replace(x, '-', '')})
+#dfm$cell_line <- sapply(dfm$cell_line, function(x){str_replace(x, 'Hs578T', 'HS578T')})
+#dfm$cell_line <- sapply(dfm$cell_line, function(x){str_replace(x, 'hME1', 'HTERT_HME1')})
+#dfm <- dfm[c('cell_line', 'molecular_subtype', 'receptor_status')] %>% distinct()
+#dfm <- rbind(dfm, data.frame(cell_line='MCF10A (GM)', molecular_subtype='Non malignant, Basal',
+ #                            receptor_status='NM'))
+#gr_metric <- merge(gr_metric, dfm, by.x='cell_line', by.y='cell_line')
+#gr_metric <- gr_metric %>% distinct()
+#gr_metric$cell_line <- as.character(gr_metric$cell_line)
 
-gr_values <- merge(gr_values, dfm, by.x='cell_line', by.y='cell_line')
-gr_values$cell_line <- as.character(gr_values$cell_line)
+#gr_values <- merge(gr_values, dfm, by.x='cell_line', by.y='cell_line')
+#gr_values$cell_line <- as.character(gr_values$cell_line)
 
-#load('data.RData')
+#save(gr_values, gr_metric, cm, dfm, file='data.RData')
+load('data.RData')
+
 
 
 
@@ -52,9 +55,11 @@ add.alpha <- function(col, alpha=1){
         function(x) 
           rgb(x[1], x[2], x[3], alpha=alpha))  
 }
-rs_colors <- add.alpha(c('#c85f61', '#4dab9b', '#ca7832', '#7da245'), 0.7)
-names(rs_colors) <- c('NM', 'Her2amp', 'TNBC', 'HR+')
-pie_colors <- add.alpha(c('#8dd3c7', '#ffffb3', '#bebada', '#fb8072', '#80b1d3', '#fdb462', '#b3de69'), 0.85)
+#rs_colors <- add.alpha(c('#c85f61', '#4dab9b', '#ca7832', '#7da245'), 0.7)
+rs_colors <- add.alpha(c('#0072B2','#E69F00','#9E1F63','#009E73'), 0.7) # #D55E00
+names(rs_colors) <- c('NM', 'Her2amp', 'TNBC', 'HR+') # HR/TNBC
+#pie_colors <- add.alpha(c('#8dd3c7', '#ffffb3', '#bebada', '#fb8072', '#80b1d3', '#fdb462', '#b3de69'), 0.85)
+pie_colors <- add.alpha(c('#7A80FF', '#FF932A', '#FF6034', '#4348BA', '#90D621', '#3AC4B8', '#00BFEE'), 0.95)
 names(pie_colors) <- c('beyondG2', 'S_dropout', 'subG1', 'G1', 'G2', 'M', 'S')
 
 # Genetic functions
@@ -141,7 +146,7 @@ sigmoidal_fit <- function(drug, cell_line, measure='GRvalue', low_high=NULL){
   minc <- min(grc$concentration)
   maxc <- max(grc$concentration)
   len = (log10(maxc) - log10(minc))*20
-  concentration = 10^(seq(log10(minc) - 1, log10(maxc) + 1, length.out = len))
+  concentration = 10^(seq(log10(minc) - 0.1, log10(maxc) + 0.1, length.out = len))
   
   sig_fit <- unlist(sapply(concentration,
                           function(x){fit$par[1] + (bound-fit$par[1]) / (1 + (x / (10** fit$par[2])) ** fit$par[3])}))
@@ -313,7 +318,7 @@ summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
   )
   
   # Rename the "mean" column    
-  datac <- rename(datac, c("mean" = measurevar))
+  datac <- plyr::rename(datac, c("mean" = measurevar))
   
   datac$se <- datac$sd / sqrt(datac$N)  # Calculate standard error of the mean
   
@@ -607,8 +612,8 @@ server <- function(input, output, session) {
                        color='purple', alpha=0.7, size=2)
         cl <- unique(grc$log10_conc)
         breaks = sort(cl[cl == round(cl)])
-        breaks = breaks[seq(1, length(breaks), 2)]
-        xlabels = sapply(breaks, function(x){formatC(10**x, format='e', digit=0)})
+        xlabels = sapply(breaks, function(x){formatC(10**x, format='fg', digit=3)})
+        #breaks = breaks[seq(1, length(breaks), 2)]
         #p <- p + xlim(min(breaks)-0.25, max(breaks)+0.25) 
         p <- p + scale_x_continuous(breaks=breaks, 
                                     labels=xlabels)
@@ -672,7 +677,8 @@ server <- function(input, output, session) {
           geom_hline(yintercept=0, alpha=0.5)
         cl <- unique(grc$log10_conc)
         breaks = sort(cl[cl == round(cl)])
-        xlabels = sapply(breaks, function(x){formatC(10**x, format='e', digit=0)})
+        xlabels = sapply(breaks, function(x){formatC(10**x, format='fg', digit=3)})
+        #xlabels = sapply(breaks, function(x){formatC(10**x, format='e', digit=0)})
         p <- p + scale_x_continuous(breaks=breaks, 
                                     labels=xlabels)
         return(p)
@@ -730,7 +736,8 @@ server <- function(input, output, session) {
           if (!is.na(cl$phase_count)){
             lc <- unique(cl$log10_conc)
             breaks = sort(lc[lc == round(lc)])
-            xlabels = sapply(breaks, function(x){formatC(10**x, format='e', digit=0)})
+            #xlabels = sapply(breaks, function(x){formatC(10**x, format='e', digit=0)})
+            xlabels = sapply(breaks, function(x){formatC(10**x, format='fg', digit=3)})
             p <- p + scale_x_continuous(breaks=breaks,
                                         labels=xlabels)
           }
