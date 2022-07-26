@@ -12,7 +12,7 @@ library(caTools)
 # Load data files
 # ---------------
 #gr_values <- data.table::fread('data/supplemental tables/gr_values_all.csv', data.table=FALSE)
-#gr_values <- subset(gr_values, select=-c(V1))
+#=gr_values <- subset(gr_values, select=-c(V1))
 #gr_metric <- data.table::fread('data/supplemental tables/gr_metrics_all.csv', data.table=FALSE)
 #gr_metric <- subset(gr_metric, select=-c(V1))
 #gr_cc <- data.table::fread('data/supplemental tables/cell_cycle_fractions_all.csv', data.table=FALSE)
@@ -32,6 +32,7 @@ library(caTools)
 #dfm <- dfm[c('cell_line', 'molecular_subtype', 'receptor_status')] %>% distinct()
 #dfm <- rbind(dfm, data.frame(cell_line='MCF10A (GM)', molecular_subtype='Non malignant, Basal',
  #                            receptor_status='NM'))
+# dfm[dfm$cell_line == 'MDAMB453', 'receptor_status'] = 'TNBC/Her2amp'
 #gr_metric <- merge(gr_metric, dfm, by.x='cell_line', by.y='cell_line')
 #gr_metric <- gr_metric %>% distinct()
 #gr_metric$cell_line <- as.character(gr_metric$cell_line)
@@ -39,7 +40,7 @@ library(caTools)
 #gr_values <- merge(gr_values, dfm, by.x='cell_line', by.y='cell_line')
 #gr_values$cell_line <- as.character(gr_values$cell_line)
 
-#save(gr_values, gr_metric, cm, dfm, file='data.RData')
+#save(gr_values, gr_metric, cm, dfm, gr_cc, file='data.RData')
 load('data.RData')
 
 
@@ -56,8 +57,8 @@ add.alpha <- function(col, alpha=1){
           rgb(x[1], x[2], x[3], alpha=alpha))  
 }
 #rs_colors <- add.alpha(c('#c85f61', '#4dab9b', '#ca7832', '#7da245'), 0.7)
-rs_colors <- add.alpha(c('#0072B2','#E69F00','#9E1F63','#009E73'), 0.7) # #D55E00
-names(rs_colors) <- c('NM', 'Her2amp', 'TNBC', 'HR+') # HR/TNBC
+rs_colors <- add.alpha(c('#0072B2','#E69F00','#9E1F63','#009E73', '#D55E00'), 0.7) # 
+names(rs_colors) <- c('NM', 'Her2amp', 'TNBC', 'HR+', 'TNBC/Her2amp')
 #pie_colors <- add.alpha(c('#8dd3c7', '#ffffb3', '#bebada', '#fb8072', '#80b1d3', '#fdb462', '#b3de69'), 0.85)
 pie_colors <- add.alpha(c('#7A80FF', '#FF932A', '#FF6034', '#4348BA', '#90D621', '#3AC4B8', '#00BFEE'), 0.95)
 names(pie_colors) <- c('beyondG2', 'S_dropout', 'subG1', 'G1', 'G2', 'M', 'S')
@@ -291,7 +292,7 @@ biphasic_fit <- function(drug, cell_line, measure='GRvalue'){
   
   res <- list(dr, fit, ic50_early, ic50_late)
   names(res) <- c('fit_vals', 'fit_params', 'IC50_early', 'IC50_late')
-  return(res)
+  return(res$fit_vals)
 }
 
 # Taken from http://www.cookbook-r.com/Manipulating_data/Summarizing_data/
@@ -344,14 +345,14 @@ make_cc_long_table <- function(gr_values, agent, cell_line){
  
 header = dashboardHeader(
   # from https://stackoverflow.com/questions/48978648/align-header-elements-in-shiny-dashboard
-  tags$li(
+  shiny::tags$li(
     class = "dropdown",
-    tags$style(
+    shiny::tags$style(
       ".main-header {max-height: 120px;
       font-size:36px; 
       font-weight:bold; 
       line-height:100px;}"),
-    tags$style(
+    shiny::tags$style(
       ".main-header .logo {height: 120px;
       font-size:36px; 
       font-weight:bold; 
@@ -375,7 +376,7 @@ body <- dashboardBody(
         #title=Project information',
         #verbatimTextOutput("project_info"),
         uiOutput('project_info'),
-        tags$head(tags$style("#project_info{font-size:12px; font-style:italic; max-height:100px; background-color: solidwhite; text-align:center;}"))
+        shiny::tags$head(shiny::tags$style("#project_info{font-size:12px; font-style:italic; max-height:100px; background-color: solidwhite; text-align:center;}"))
         #uiOutput("project_info")
     )
   ),
@@ -395,7 +396,7 @@ body <- dashboardBody(
     column(4,
            box(title='HMS LINCS small molecules DB', width=12,
            uiOutput('hmsl_id'),
-           tags$head(tags$style("#hmsl_id{font-size:20px;}")))) 
+           shiny::tags$head(shiny::tags$style("#hmsl_id{font-size:20px;}")))) 
   #column(4, imageOutput('lsp_logo'))
   ),
   
@@ -405,7 +406,7 @@ body <- dashboardBody(
                hover = hoverOpts("plot_hover", delay = 10, delayType = "debounce")),
     #uiOutput("hover_info")
     #uiOutput("mouse_pointer"),
-    tags$head(tags$style("#gr_metrics{cursor:pointer;}"))
+    shiny::tags$head(shiny::tags$style("#gr_metrics{cursor:pointer;}"))
     #tags$head(HTML('<style>{{uiOutput("mouse_pointer")}}</style>'))
     
     #gr_metrics{cursor:{{
